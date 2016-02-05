@@ -1,0 +1,129 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Tariffs Example</title>
+  <meta charset="UTF-8">
+  <script src="https://code.jquery.com/jquery-2.2.0.min.js"></script>
+  <!-- look and feel -->
+  <link rel="stylesheet" type="text/css" href="../example-api-common/style.css">
+  <link rel="stylesheet" type="text/css" href="http://blog.dfilimonov.com/github-ribbons-css/ribbons.css">
+  <script src="../example-api-common/style.js"></script>
+  <!-- shared sources -->
+  <script src="../example-api-common/common.js"></script>
+</head>
+<body>
+  <div id="header"></div>
+
+  <div id="example" class="content">
+    <h1>API Rules Of Origin Example</h1>
+    
+    <div id="loading">
+      Please wait while it loads.
+    </div>
+    
+    <div id="questions" style="display: none;">
+      
+    </div>
+    
+    <style>
+      pre, p {
+        border: 1px solid #dddddd;
+        white-space: pre-wrap;
+      }
+    </style>
+    
+    <script src="psr.js"></script>
+
+    <script>
+      // Assume we already know what we want. I.e. want to export to a particular
+      // country under a particular HS code under a particular agreement.
+      
+      // export boneless beef to japan
+      var hsCountry = 'JPN';
+      var hsCode = '020230030'; 
+      var hsAgreement = 'JAEPA';
+      
+      var productSpecificRules = null;
+      var questionAnswers = {};
+
+      $(document).ready(function()
+      {
+        $.invoke('/tariffs/agreements', function(agreements)
+        {
+          $.invoke('/tariffs/heading/' + hsCode.substr(0, 4), function(headingData)
+          {
+            var agreementData = agreements[hsAgreement];
+            var countryData = agreementData.countries[hsCountry];
+            var hsData = headingData[hsCountry][hsAgreement][hsCode];
+            productSpecificRules = TariffPSR.parse(hsData.tariffs.productSpecificRules, agreementData.rulesOfOrigin);
+            iterateQuestions();
+            $('#loading').hide();
+          });
+        });
+      });
+      
+      var answers = {};
+      
+      function iterateQuestions()
+      {
+        var html = '';
+        
+        html += '<p><b>Official</b>: ' + productSpecificRules.official + '</p>';
+        
+        var outcome = productSpecificRules.iterate(answers);
+        
+        productSpecificRules.categories
+          .filter(function (category) { return category.visible; })
+          .forEach(function(category)
+        {
+          var visibleQuestions = category.questions.filter(function (question) { return question.visible; });
+
+          html += '<h3><b>category.label</b>: ' + category.label + '</h3>';
+          
+          if (category.details)
+          {
+            html += '<pre><b>category.details</b>: ' + category.details + '</pre>';
+          }
+
+          var categorySpecificRules = category.friendlyRules;
+          if (category.friendlyRules != '')
+          {
+            html += '<pre><b>category.friendlyRules</b>: Rules for HS ' + hsCode + ' are ' + category.friendlyRules + '</pre>';
+          }
+
+          visibleQuestions.forEach(function(question)
+          {
+            html += '<h4><b>question.label</b>: ' + question.label + '</h4>';
+            
+            if (question.conditions)
+            {
+              html += '<p><b>question.conditions</b>: <ul><li>' + question.conditions.join('</li><li>') + '</li/></ul></p>';
+            }
+
+            html += '<button ' + (answers[question.itemIf] === true? 'style="font-weight: bold;"' : '') + ' onclick="setAnswer(\'' + question.itemIf + '\', true)">Yes</button>';
+            html += '<button ' + (answers[question.itemIf] === false? 'style="font-weight: bold;"' : '') + ' onclick="setAnswer(\'' + question.itemIf + '\', false)">No</button>';
+
+            html += '<pre><b>question.details</b>: ' + question.details + '</pre>';
+          });
+
+        });
+        
+        html += '<p style="background-color: ' + (outcome.itemIf == 'applicable' ? '#00FF00' : (outcome.itemIf == 'inapplicable' ? '#FF0000' : '#CCCCCC')) + '"><b>outcome.label</b>: ' + outcome.label + '</p>';
+        
+        html += '<pre><b>outcome.details</b>: ' + outcome.details + '</pre>';
+        
+        $('#questions').html(html);
+        $('#questions').show();
+      }
+      function setAnswer(itemIf, answer)
+      {
+        answers[itemIf] = answer;
+        iterateQuestions();
+      }
+    </script>
+  </div>
+  
+  <div id="footer"></div>
+  
+</body>
+</html>
