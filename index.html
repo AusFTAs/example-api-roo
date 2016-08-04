@@ -3,7 +3,10 @@
 <head>
   <title>Tariffs Example</title>
   <meta charset="UTF-8">
-  <script src="https://code.jquery.com/jquery-2.2.0.min.js"></script>
+  <!-- jquery and friends -->
+  <script src="//ausftas.github.io/example-api-common/jquery-2.2.4.js"></script>
+  <script src="//ausftas.github.io/example-api-common/jquery-ui.js"></script>
+  <link rel="stylesheet" type="text/css" href="//ausftas.github.io/example-api-common/jquery-ui.css">
   <!-- look and feel -->
   <link rel="stylesheet" type="text/css" href="//ausftas.github.io/example-api-common/style.css">
   <link rel="stylesheet" type="text/css" href="http://blog.dfilimonov.com/github-ribbons-css/ribbons.css">
@@ -46,15 +49,14 @@
       var productSpecificRules = null;
       var questionAnswers = {};
 
-      $(document).ready(function()
+      $.startExample(function(hierarchy, agreements)
       {
-        $.invoke('/tariffs/agreements', function(agreements)
+        $.invoke('/tariffs/agreement/' + hsAgreement, function(agreementData)
         {
-          $.invoke('/tariffs/heading/' + hsCode.substr(0, 4), function(headingData)
+          $.invoke('/tariffs/' + hsCountry + '/' + hsAgreement + '/heading/' + hsCode.substr(0, 4), function(headingData)
           {
-            var agreementData = agreements[hsAgreement];
             var countryData = agreementData.countries[hsCountry];
-            var hsData = headingData[hsCountry][hsAgreement][hsCode];
+            var hsData = headingData[hsCode];
             productSpecificRules = TariffPSR.parse(hsData.tariffs.productSpecificRules, agreementData.rulesOfOrigin);
             iterateQuestions();
             $('#loading').hide();
