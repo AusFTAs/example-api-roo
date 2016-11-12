@@ -1,7 +1,7 @@
 # Rules Of Origin | Free Trade Agreement Portal API
 
-This example accesses the FTA Portal API through jQuery. It gets PSR data of a
-HS item from the API and displays RoO questionnaire.
+This example accesses the FTA Portal API. It gets PSR data of
+HS items from the API and displays RoO questionnaire.
 
 ## Source code
 
