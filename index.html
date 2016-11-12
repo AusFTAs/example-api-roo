@@ -1,18 +1,18 @@
 <!DOCTYPE html>
 <html>
 <head>
-  <title>Tariffs Example</title>
+  <title>ROO Example</title>
   <meta charset="UTF-8">
-  <!-- jquery and friends -->
-  <script src="//ausftas.github.io/example-api-common/jquery-2.2.4.js"></script>
-  <script src="//ausftas.github.io/example-api-common/jquery-ui.js"></script>
-  <link rel="stylesheet" type="text/css" href="//ausftas.github.io/example-api-common/jquery-ui.css">
+  <!-- Babel, d3 and friends. B -->
+  <script src="/example-api-common/babel.min.js"></script>
+  <script src="/example-api-common/d3.v4.js"></script>
   <!-- look and feel -->
-  <link rel="stylesheet" type="text/css" href="//ausftas.github.io/example-api-common/style.css">
   <link rel="stylesheet" type="text/css" href="http://blog.dfilimonov.com/github-ribbons-css/ribbons.css">
-  <script src="//ausftas.github.io/example-api-common/style.js"></script>
+  <link rel="stylesheet" type="text/css" href="/example-api-common/style.css">
+  <script type="text/babel" data-presets="es2015" src="/example-api-common/style.js"></script>
   <!-- shared sources -->
-  <script src="//ausftas.github.io/example-api-common/common.js"></script>
+  <script type="text/babel" data-presets="es2015" src="/example-api-common/common.js"></script>
+  <script src="/example-api-common/psr.js"></script>
 </head>
 <body>
   <div id="header"></div>
@@ -24,7 +24,7 @@
       Please wait while it loads.
     </div>
     
-    <div id="questions" style="display: none;">
+    <div id="questions">
       
     </div>
     
@@ -35,93 +35,99 @@
       }
     </style>
     
-    <script src="psr.js"></script>
-
-    <script>
+    <script type="text/babel" data-presets="es2015">
       // Assume we already know what we want. I.e. want to export to a particular
       // country under a particular HS code under a particular agreement.
       
-      // export boneless beef to japan
-      var hsCountry = 'JPN';
-      var hsCode = '020230030'; 
-      var hsAgreement = 'JAEPA';
-      
-      var productSpecificRules = null;
-      var questionAnswers = {};
-
-      $.startExample(function(hierarchy, agreements)
+      FTAPortalAPIExample.start(function(hierarchy, agreements)
       {
-        $.invoke('/tariffs/agreement/' + hsAgreement, function(agreementData)
+        function parameter(name, defaultValue='')
         {
-          $.invoke('/tariffs/' + hsCountry + '/' + hsAgreement + '/heading/' + hsCode.substr(0, 4), function(headingData)
+          let value = window.location.hash.match(RegExp(`${name}=([^&]+)`, 'i'));
+          return value && value[1] || defaultValue;
+        }
+        
+        let agreement = parameter('agreement', Object.keys(agreements)[0]);
+        let country = parameter('country', Object.keys(agreements[Object.keys(agreements)[0]].countries)[0]);
+        let heading = parameter('hs', '0101').substr(0, 4);
+        let hscode = parameter('hs', '0101');
+        
+        Promise.all([
+          FTAPortalAPIExample.invoke(`/tariffs/agreement/${agreement}`),
+          FTAPortalAPIExample.invoke(`/tariffs/${country}/${agreement}/heading/${heading}`)
+        ]).then(data =>
+        {
+          let agreementData = data[0];
+          let subheadingData = data[1];
+          let hscodeData = subheadingData[hscode];
+          
+          let productSpecificRules = TariffPSR.parse(hscodeData.tariffs.productSpecificRules, agreementData.rulesOfOrigin, {hscode: hscode});
+          
+          let answers = {};
+      
+          function iterateQuestions()
           {
-            var countryData = agreementData.countries[hsCountry];
-            var hsData = headingData[hsCode];
-            productSpecificRules = TariffPSR.parse(hsData.tariffs.productSpecificRules, agreementData.rulesOfOrigin);
+            let display = d3.select(questions).html('');
+            
+            display.p(`<b>Official</b>: ${productSpecificRules.official}`);
+            
+            let outcome = productSpecificRules.iterate(answers);
+            
+            
+            productSpecificRules.categories
+              .filter(category => category.visible)
+              .forEach(category =>
+            {
+              let visibleQuestions = category.questions.filter(question =>  question.visible);
+
+              display.h3(`<b>[Category Label]</b>: ${ category.label }`);
+              
+              if (category.details)
+              {
+                display.pre(`<b>[Category Details]</b>: ${ category.details }`);
+              }
+              
+              let categorySpecificRules = category.friendlyRules;
+              if (category.friendlyRules)
+              {
+                display.p(`<b>[Category Friendly Rules]</b>: Rules for HS ${hscode} are ${category.friendlyRules}`);
+              }
+
+              visibleQuestions.forEach(question =>
+              {
+                display.h4(`<b>[Question Label]</b>: ${question.label}`);
+                
+                if (question.conditions)
+                {
+                  display.p(`<b>Question Conditions</b>: `).ul().selectAll().data(question.conditions).enter().li(x => x);
+                }
+                
+                if (question.details)
+                {
+                  display.p(`<b>Question Details</b>: ${question.details}`);
+                }
+                
+                display.button('Yes').style('font-weight', answers[question.itemIf] === true? 'bold' : 'normal').on('click', () => iterateQuestions(answers[question.itemIf] = true));
+                display.button('No').style('font-weight', answers[question.itemIf] === false? 'bold' : 'normal').on('click', () => iterateQuestions(answers[question.itemIf] = false));
+              });
+
+            });
+
+            display.p(`<b>Outcome Label</b>: ${outcome.label}`).style('background-color', outcome.itemIf == 'applicable' ? '#77FF77' : (outcome.itemIf == 'inapplicable' ? '#FF7777' : '#DDDDDD'))
+              .pre(`<b>Outcome Details</b>: ${outcome.details}`);
+          }
+          
+          function setAnswer(itemIf, answer)
+          {
+            answers[itemIf] = answer;
             iterateQuestions();
-            $('#loading').hide();
-          });
+          }
+          
+          iterateQuestions();
+          
+          d3.select('#loading').hide();
         });
       });
-      
-      var answers = {};
-      
-      function iterateQuestions()
-      {
-        var html = '';
-        
-        html += '<p><b>Official</b>: ' + productSpecificRules.official + '</p>';
-        
-        var outcome = productSpecificRules.iterate(answers);
-        
-        productSpecificRules.categories
-          .filter(function (category) { return category.visible; })
-          .forEach(function(category)
-        {
-          var visibleQuestions = category.questions.filter(function (question) { return question.visible; });
-
-          html += '<h3><b>category.label</b>: ' + category.label + '</h3>';
-          
-          if (category.details)
-          {
-            html += '<pre><b>category.details</b>: ' + category.details + '</pre>';
-          }
-
-          var categorySpecificRules = category.friendlyRules;
-          if (category.friendlyRules != '')
-          {
-            html += '<pre><b>category.friendlyRules</b>: Rules for HS ' + hsCode + ' are ' + category.friendlyRules + '</pre>';
-          }
-
-          visibleQuestions.forEach(function(question)
-          {
-            html += '<h4><b>question.label</b>: ' + question.label + '</h4>';
-            
-            if (question.conditions)
-            {
-              html += '<p><b>question.conditions</b>: <ul><li>' + question.conditions.join('</li><li>') + '</li/></ul></p>';
-            }
-
-            html += '<button ' + (answers[question.itemIf] === true? 'style="font-weight: bold;"' : '') + ' onclick="setAnswer(\'' + question.itemIf + '\', true)">Yes</button>';
-            html += '<button ' + (answers[question.itemIf] === false? 'style="font-weight: bold;"' : '') + ' onclick="setAnswer(\'' + question.itemIf + '\', false)">No</button>';
-
-            html += '<pre><b>question.details</b>: ' + question.details + '</pre>';
-          });
-
-        });
-        
-        html += '<p style="background-color: ' + (outcome.itemIf == 'applicable' ? '#00FF00' : (outcome.itemIf == 'inapplicable' ? '#FF0000' : '#CCCCCC')) + '"><b>outcome.label</b>: ' + outcome.label + '</p>';
-        
-        html += '<pre><b>outcome.details</b>: ' + outcome.details + '</pre>';
-        
-        $('#questions').html(html);
-        $('#questions').show();
-      }
-      function setAnswer(itemIf, answer)
-      {
-        answers[itemIf] = answer;
-        iterateQuestions();
-      }
     </script>
   </div>
   
