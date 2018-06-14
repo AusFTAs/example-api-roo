@@ -19,61 +19,63 @@
 
   <div id="example" class="content">
     <h1>API Rules Of Origin Example</h1>
-    
+
     <div id="loading">
       Please wait while it loads.
     </div>
-    
+
     <div id="questions">
-      
+
     </div>
-    
+
     <style>
       pre, p {
         border: 1px solid #dddddd;
         white-space: pre-wrap;
       }
     </style>
-    
-    <script type="text/babel" data-presets="es2015">
+
+    <script type="text/babel">
       // Assume we already know what we want. I.e. want to export to a particular
       // country under a particular HS code under a particular agreement.
-      
-      FTAPortalAPIExample.start(function(hierarchy, agreements)
+
+      FTAPortalAPIExample.start(async function(version, agreements)
       {
         function parameter(name, defaultValue='')
         {
           let value = window.location.hash.match(RegExp(`${name}=([^&]+)`, 'i'));
           return value && value[1] || defaultValue;
         }
-        
+
+        const hierarchy = await FTAPortalAPIExample.invoke('/products/hierarchy.json');
+
         let agreement = parameter('agreement', Object.keys(agreements)[0]);
         let country = parameter('country', Object.keys(agreements[Object.keys(agreements)[0]].countries)[0]);
         let heading = parameter('hs', '0101').substr(0, 4);
         let hscode = parameter('hs', '0101');
-        
+
         Promise.all([
-          FTAPortalAPIExample.invoke(`/tariffs/agreement/${agreement}`),
-          FTAPortalAPIExample.invoke(`/tariffs/${country}/${agreement}/heading/${heading}`)
+          FTAPortalAPIExample.invoke(`/products/tariffs/${country}/${agreement}/common.json`),
+          FTAPortalAPIExample.invoke(`/products/tariffs/${country}/${agreement}/${heading}.json`)
         ]).then(data =>
         {
           let agreementData = data[0];
           let subheadingData = data[1];
           let hscodeData = subheadingData[hscode];
-          
+
           let productSpecificRules = TariffPSR.parse(hscodeData.tariffs.productSpecificRules, agreementData.rulesOfOrigin, {hscode: hscode});
-          
+
           let answers = {};
-      
+
           function iterateQuestions()
           {
             let display = d3.select(questions).html('');
-            
+
             display.p(`<b>Official</b>: ${productSpecificRules.official}`);
-            
+
             let outcome = productSpecificRules.iterate(answers);
-            
-            
+
+
             productSpecificRules.categories
               .filter(category => category.visible)
               .forEach(category =>
@@ -81,12 +83,12 @@
               let visibleQuestions = category.questions.filter(question =>  question.visible);
 
               display.h3(`<b>[Category Label]</b>: ${ category.label }`);
-              
+
               if (category.details)
               {
                 display.pre(`<b>[Category Details]</b>: ${ category.details }`);
               }
-              
+
               let categorySpecificRules = category.friendlyRules;
               if (category.friendlyRules)
               {
@@ -96,17 +98,17 @@
               visibleQuestions.forEach(question =>
               {
                 display.h4(`<b>[Question Label]</b>: ${question.label}`);
-                
+
                 if (question.conditions)
                 {
                   display.p(`<b>Question Conditions</b>: `).ul().selectAll().data(question.conditions).enter().li(x => x);
                 }
-                
+
                 if (question.details)
                 {
                   display.p(`<b>Question Details</b>: ${question.details}`);
                 }
-                
+
                 display.button('Yes').style('font-weight', answers[question.itemIf] === true? 'bold' : 'normal').on('click', () => iterateQuestions(answers[question.itemIf] = true));
                 display.button('No').style('font-weight', answers[question.itemIf] === false? 'bold' : 'normal').on('click', () => iterateQuestions(answers[question.itemIf] = false));
               });
@@ -116,22 +118,22 @@
             display.p(`<b>Outcome Label</b>: ${outcome.label}`).style('background-color', outcome.itemIf == 'applicable' ? '#77FF77' : (outcome.itemIf == 'inapplicable' ? '#FF7777' : '#DDDDDD'))
               .pre(`<b>Outcome Details</b>: ${outcome.details}`);
           }
-          
+
           function setAnswer(itemIf, answer)
           {
             answers[itemIf] = answer;
             iterateQuestions();
           }
-          
+
           iterateQuestions();
-          
+
           d3.select('#loading').hide();
         });
       });
     </script>
   </div>
-  
+
   <div id="footer"></div>
-  
+
 </body>
 </html>
